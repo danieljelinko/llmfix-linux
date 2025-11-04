@@ -28,6 +28,7 @@ CODES = {
     "//MD": "// transform to markdown",
     "//FS": "// make fastai style. concise, short var names, as much on one line as possible, but no `;`. Dont add ``python codefence.",
     "//SS": "",
+    "//PC": "// edit to be polite and friendly and orthographically correct",
 }
 
 def replace_all(txt, reps):
