@@ -9,7 +9,7 @@ Transform selected text with AI instantly – select anywhere on your Linux desk
 ## Prerequisites
 
 *   Python 3.12+
-*   An Anthropic API key:
+*   The local **ai-gateway** running: requests route through `http://127.0.0.1:4001/v1` (OpenAI-compatible, backed by CLI-subscription OAuth), so **no Anthropic API key is needed**. Start it with `just up` in the `ai-gateway` repo. Override the endpoint/model with the `AI_GATEWAY_URL` / `LLMFIX_MODEL` env vars.
 
 System packages for clipboard and tray (Ubuntu/Mint):
 
@@ -30,7 +30,7 @@ Or with pip:
 
 ```
 python3 -m venv .venv && . .venv/bin/activate
-pip install claudette pynput pyperclip pillow mss pystray
+pip install litellm pynput pyperclip pillow mss pystray
 python llmfix_linux.py
 ```
 

@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#     "claudette",
+#     "litellm",
 #     "pynput",
 #     "pyperclip",
 #     "pillow",
@@ -11,13 +11,13 @@
 # ]
 # ///
 # Fork of AnswerDotAI/llmfix — Linux adaptation under Apache-2.0.
-import time, pyperclip, threading, base64, logging, argparse
+import os, time, pyperclip, threading, base64, logging, argparse
 from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 from pynput.keyboard import Key, Controller, Listener
 from pynput.mouse import Controller as MouseController
-from claudette import Chat
+from litellm import completion
 from mss import mss
 
 try:
@@ -29,6 +29,13 @@ except Exception:
 log = logging.getLogger(__name__)
 kb = Controller()
 mouse = MouseController()
+
+GATEWAY_BASE = os.environ.get("AI_GATEWAY_URL", "http://127.0.0.1:4001/v1")  # 127.0.0.1, never localhost
+MODEL        = os.environ.get("LLMFIX_MODEL", "claude-sonnet")
+
+def gateway_model(model_id: str) -> str:
+    "litellm route for a gateway model id: `openai/` prefix = OpenAI-compatible endpoint."
+    return model_id if model_id.startswith("openai/") else f"openai/{model_id}"
 
 CODES = {
     "//C": "// Correct the spelling and grammar and punctuation, but do not change the meaning of the text, keep the words style and input language as they are",
@@ -122,23 +129,24 @@ def llm(inp: str):
         log.info("Screenshot mode")
         ss = capture_screen()
         resized = resize_img(ss)
-        prompt = [
-            dict(type="image", source=dict(type="base64", media_type="image/png", data=img_b64(resized))),
-            dict(type="text", text=prompt)
+        content = [
+            dict(type="text", text=prompt),
+            dict(type="image_url", image_url=dict(url=f"data:image/png;base64,{img_b64(resized)}"))
         ]
-        model = "claude-sonnet-4-20250514"
-        log.info(f"Using {model} with screenshot")
+        log.info(f"Using {MODEL} with screenshot")
     else:
-        model = "claude-3-5-haiku-20241022"
-        log.debug(f"Using {model}")
+        content = prompt
+        log.debug(f"Using {MODEL}")
 
     try:
-        log.debug("Sending to LLM...")
-        res = Chat(model)(prompt).content[0].text
+        log.debug(f"Sending to {GATEWAY_BASE}...")
+        resp = completion(model=gateway_model(MODEL), messages=[dict(role="user", content=content)], api_base=GATEWAY_BASE, api_key="dummy")
+        res = resp.choices[0].message.content
         log.debug(f"Response ({len(res)} chars): {res[:100]}...")
         return res
     except Exception as e:
         log.error(f"LLM failed: {e}")
+        log.error(f"Is the ai-gateway up? Try: cd ../ai-gateway && just up   (or 'just heal-token' if the Claude token wedged)")
         raise
 
 def copy_selection():
@@ -306,16 +314,21 @@ class ToolbarApp:
         copy_selection()
 
         inp = pyperclip.paste() or ""
-        if inp:
-            log.debug(f"Got input ({len(inp)} chars): {inp[:100]}...")
-            try:
-                res = llm(inp)
-                log.debug("LLM done, copying result")
-                pyperclip.copy(res)
-            except Exception as e:
-                log.error(f"Error: {e}")
-        else:
+        if not inp:
             log.warning("No input")
+            pyperclip.copy(old)
+            return
+
+        log.debug(f"Got input ({len(inp)} chars): {inp[:100]}...")
+        try:
+            res = llm(inp)
+        except Exception as e:
+            log.error(f"Error: {e}; leaving selection untouched")
+            pyperclip.copy(old)
+            return
+
+        log.debug("LLM done, copying result")
+        pyperclip.copy(res)
 
         log.debug("Pasting with Ctrl+V")
         paste_clipboard()
