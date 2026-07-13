@@ -14,6 +14,15 @@ def safe_hardware(monkeypatch):
     monkeypatch.setattr(m, "kb", MagicMock(name="kb"))
     monkeypatch.setattr(m, "mouse", MagicMock(name="mouse"))
     monkeypatch.setattr(m.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(m.subprocess, "run", MagicMock(name="subprocess.run"))  # no real notify-send popups
+
+
+@pytest.fixture
+def mock_notify(monkeypatch) -> MagicMock:
+    "Replace notify() with a mock so fix() tests can assert on the toasts without spawning popups."
+    fake = MagicMock(name="notify")
+    monkeypatch.setattr(m, "notify", fake)
+    return fake
 
 
 @pytest.fixture

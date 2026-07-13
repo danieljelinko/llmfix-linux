@@ -1,3 +1,5 @@
+import logging
+
 import llmfix_linux as m
 
 
@@ -43,4 +45,35 @@ def test_fix_restores_clipboard_when_llm_fails(clipboard, mock_completion):
     make_app().fix()  # must not raise
 
     # Then the original selection is left intact on the clipboard
+    assert clipboard["value"] == "text //CC"
+
+
+def test_fix_notifies_and_logs_processing_then_pasted(clipboard, mock_completion, mock_notify, caplog):
+    # Given a selection carrying a command and a gateway that returns fixed text
+    clipboard["value"] = "please //CC fix"
+    mock_completion(return_text="FIXED")
+
+    # When we run the fix flow at INFO level
+    with caplog.at_level(logging.INFO):
+        make_app().fix()
+
+    # Then a start and a done toast fired, and the input + result were logged at INFO
+    titles = [c.args[0] for c in mock_notify.call_args_list]
+    assert "Processing…" in titles
+    assert "Pasted ✓" in titles
+    assert any("Processing text" in r.message for r in caplog.records)
+    assert any("Pasted result" in r.message for r in caplog.records)
+
+
+def test_fix_notifies_on_error(clipboard, mock_completion, mock_notify):
+    # Given a selection and a gateway that raises
+    clipboard["value"] = "text //CC"
+    mock_completion(raises=RuntimeError("boom"))
+
+    # When we run the fix flow (must not raise)
+    make_app().fix()
+
+    # Then an error toast fired and the original clipboard is left intact
+    titles = [c.args[0] for c in mock_notify.call_args_list]
+    assert "LLMFix error" in titles
     assert clipboard["value"] == "text //CC"
