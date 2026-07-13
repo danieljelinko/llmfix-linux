@@ -1,0 +1,28 @@
+[project]
+name = "llmfix-linux"
+version = "0.1.0"
+description = "Linux fork of llmfix — hotkey-driven LLM text fixer routed through a local ai-gateway."
+requires-python = ">=3.12"
+dependencies = [
+    "litellm",
+    "pynput",
+    "pyperclip",
+    "pillow",
+    "mss",
+    "pystray",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-randomly>=4.1.0",
+]
+
+# Not an installable package — this project only exists to provide a test/run environment.
+# The script itself is distributed standalone via its PEP 723 header (`uv run llmfix_linux.py`).
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

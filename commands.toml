@@ -1,0 +1,27 @@
+# llmfix commands — the // shortcuts you type inside your selected text.
+#
+# How it works: llmfix substitutes each key (e.g. //CC) found in your selection
+# with its value before sending the text to the LLM. The value is an instruction
+# to the model, so it conventionally starts with "// " (that's how the model is
+# told it's an instruction, not content).
+#
+# Special case: //SS has an empty value. Instead of substituting text it switches
+# on screenshot mode — the monitor under the mouse is captured and attached to the
+# request.
+#
+# Edit this file to add, change, or remove commands. Keys must start with //.
+# If this file is missing or malformed, llmfix falls back to its built-in defaults.
+# Run `uv run llmfix_linux.py --list` to see the resulting table.
+
+[commands]
+"//C" = "// Correct the spelling and grammar and punctuation, but do not change the meaning of the text, keep the words style and input language as they are"
+"//CC" = "// edit to be clear and concise"
+"//FR" = "// edit to be friendly and informal"
+"//FO" = "// edit to be formal and polite"
+"//BLUF" = "// edit to bring the bottom line upfront"
+"//DOH" = "// edit to fix typo's and spelling mistakes"
+"//HH" = "// edit to fix typo's and spelling mistakes, do not translate into English keep the original language Hungarian"
+"//MD" = "// transform to markdown"
+"//FS" = "// make fastai style. concise, short var names, as much on one line as possible, but no `;`. Dont add ``python codefence."
+"//PC" = "// edit to be polite and friendly and orthographically correct"
+"//SS" = ""

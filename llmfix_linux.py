@@ -11,14 +11,20 @@
 # ]
 # ///
 # Fork of AnswerDotAI/llmfix — Linux adaptation under Apache-2.0.
-import os, time, pyperclip, threading, base64, logging, argparse
+import os, time, pyperclip, threading, base64, logging, argparse, tomllib
 from io import BytesIO
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 from pynput.keyboard import Key, Controller, Listener
 from pynput.mouse import Controller as MouseController
+import litellm
 from litellm import completion
 from mss import mss
+
+litellm.suppress_debug_info = True  # drop the "Give Feedback / Get Help" GitHub-URL dump on error
+for _n in ("LiteLLM", "openai", "httpx"):  # silence duplicate/noisy INFO lines from these deps
+    logging.getLogger(_n).setLevel(logging.WARNING)
 
 try:
     import pystray
@@ -37,7 +43,7 @@ def gateway_model(model_id: str) -> str:
     "litellm route for a gateway model id: `openai/` prefix = OpenAI-compatible endpoint."
     return model_id if model_id.startswith("openai/") else f"openai/{model_id}"
 
-CODES = {
+DEFAULT_CODES = {  # built-in fallback used when commands.toml is missing or malformed
     "//C": "// Correct the spelling and grammar and punctuation, but do not change the meaning of the text, keep the words style and input language as they are",
     "//CC": "// edit to be clear and concise",
     "//FR": "// edit to be friendly and informal",
@@ -51,8 +57,32 @@ CODES = {
     "//SS": "",
 }
 
+def commands_path() -> Path:
+    "Path to the optional `commands.toml` sitting next to this script."
+    return Path(__file__).resolve().parent / "commands.toml"
+
+def load_commands(path: Path, defaults: dict[str, str]) -> dict[str, str]:
+    "Merge the `[commands]` table of a TOML `path` over `defaults`; return `defaults` if it is missing or malformed."
+    if not path.exists():
+        return dict(defaults)
+    try:
+        with open(path, "rb") as f: data = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        log.warning(f"Could not read {path}: {e}; using built-in commands")
+        return dict(defaults)
+    return {**defaults, **data.get("commands", {})}
+
+CODES = load_commands(commands_path(), DEFAULT_CODES)
+
+def print_codes(codes: dict[str, str]) -> None:
+    "Print the available `//` commands and their descriptions as a table on stdout."
+    descs = {c: (i.removeprefix("// ") or "attach a screenshot of the monitor under the mouse") for c, i in codes.items()}
+    w = max(map(len, descs)) if descs else 0
+    print("Available // commands:")
+    for c, d in descs.items(): print(f"  {c:<{w}}  {d}")
+
 def replace_all(txt, reps):
-    for old, new in reps.items():
+    for old, new in sorted(reps.items(), key=lambda kv: len(kv[0]), reverse=True):  # longest first, so //C can't shadow //CC
         txt = txt.replace(old, new)
     log.debug(f"Text after replacement: {txt[:100]}...")
     return txt
@@ -140,13 +170,13 @@ def llm(inp: str):
 
     try:
         log.debug(f"Sending to {GATEWAY_BASE}...")
-        resp = completion(model=gateway_model(MODEL), messages=[dict(role="user", content=content)], api_base=GATEWAY_BASE, api_key="dummy")
+        resp = completion(model=gateway_model(MODEL), messages=[dict(role="user", content=content)], api_base=GATEWAY_BASE, api_key="dummy", num_retries=0, max_retries=0)  # local gateway: fail fast, don't retry
         res = resp.choices[0].message.content
         log.debug(f"Response ({len(res)} chars): {res[:100]}...")
         return res
     except Exception as e:
         log.error(f"LLM failed: {e}")
-        log.error(f"Is the ai-gateway up? Try: cd ../ai-gateway && just up   (or 'just heal-token' if the Claude token wedged)")
+        log.error(f"Is the ai-gateway up? Try: cd ../../ai-gateway && just up   (or 'just heal-token' if the Claude token wedged)")
         raise
 
 def copy_selection():
@@ -349,9 +379,15 @@ def main():
     p.add_argument('--tray', action='store_true', help='Enable system tray (default if pystray available)', default=True)
     p.add_argument('--no-tray', action='store_true', help='Disable system tray entirely', default=False)
     p.add_argument('--disable-caps-a', action='store_true', help='Disable built-in Caps then A quick trigger', default=False)
+    p.add_argument('--list', action='store_true', help='Print the available // commands and exit', default=False)
     args = p.parse_args()
 
+    if args.list:
+        print_codes(CODES)
+        return
+
     setup_logging(args.log_level)
+    print_codes(CODES)
     if not check_clipboard_backend():
         log.warning("Clipboard backend not ready; operations may fail until you install xclip or wl-clipboard.")
     log.info("Starting llmfix (Linux)")
