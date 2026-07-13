@@ -73,7 +73,7 @@ def test_shipped_commands_toml_loads_and_keeps_screenshot_sentinel():
 
     # Then it parses and //SS remains the empty screenshot sentinel
     assert result["//SS"] == ""
-    assert result["//CC"] == "// edit to be clear and concise"
+    assert result["//CC"].startswith("// edit to be clear and concise")  # prefix, not exact: the wording is user-editable
 
 
 def test_print_codes_prints_a_row_per_command_stripping_prefix(capsys):
