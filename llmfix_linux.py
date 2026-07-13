@@ -11,7 +11,7 @@
 # ]
 # ///
 # Fork of AnswerDotAI/llmfix — Linux adaptation under Apache-2.0.
-import os, time, pyperclip, threading, base64, logging, argparse, tomllib
+import os, time, pyperclip, threading, base64, logging, argparse, tomllib, subprocess
 from io import BytesIO
 from pathlib import Path
 
@@ -35,6 +35,16 @@ except Exception:
 log = logging.getLogger(__name__)
 kb = Controller()
 mouse = MouseController()
+
+def notify(title, body="", silent=False):
+    "Show a desktop toast via notify-send; a no-op if the binary is missing."
+    try:
+        cmd = ["notify-send", "LLMFix"]
+        if silent: cmd.append("--hint=boolean:suppress-sound:true")
+        cmd.append(f"{title}\n{body}" if body else title)
+        subprocess.run(cmd)
+    except FileNotFoundError:
+        log.debug("notify-send not found")
 
 GATEWAY_BASE = os.environ.get("AI_GATEWAY_URL", "http://127.0.0.1:4001/v1")  # 127.0.0.1, never localhost
 MODEL        = os.environ.get("LLMFIX_MODEL", "claude-sonnet")
@@ -86,6 +96,10 @@ def replace_all(txt, reps):
         txt = txt.replace(old, new)
     log.debug(f"Text after replacement: {txt[:100]}...")
     return txt
+
+def matched_commands(inp: str, codes: dict[str, str]) -> list[str]:
+    "The // command keys present in `inp`, longest first (matches replace_all precedence)."
+    return sorted((c for c in codes if c in inp), key=len, reverse=True)
 
 def resize_img(img, max_px=1_150_000):
     w, h = img.size
@@ -349,11 +363,14 @@ class ToolbarApp:
             pyperclip.copy(old)
             return
 
-        log.debug(f"Got input ({len(inp)} chars): {inp[:100]}...")
+        cmds = matched_commands(inp, CODES)
+        notify("Processing…", f"{', '.join(cmds) or 'no command'}: {inp[:80]}")
+        log.info("Processing text %r with command(s) %s", inp[:200], cmds or ["(none)"])
         try:
             res = llm(inp)
         except Exception as e:
             log.error(f"Error: {e}; leaving selection untouched")
+            notify("LLMFix error", str(e))
             pyperclip.copy(old)
             return
 
@@ -362,6 +379,8 @@ class ToolbarApp:
 
         log.debug("Pasting with Ctrl+V")
         paste_clipboard()
+        log.info("Pasted result %r", res[:200])
+        notify("Pasted ✓", res[:180] + ("…" if len(res) > 180 else ""), silent=True)
 
         log.debug("Restoring clipboard")
         pyperclip.copy(old)

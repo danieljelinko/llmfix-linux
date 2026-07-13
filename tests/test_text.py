@@ -55,3 +55,25 @@ def test_replace_all_leaves_text_untouched_when_no_token_matches():
 
     # Then the text is unchanged
     assert result == "plain text, nothing to expand"
+
+
+def test_matched_commands_returns_present_keys_longest_first():
+    # Given text carrying two command tokens where one is a prefix of the other
+    text = "start //C middle //CC end"
+
+    # When we ask which commands are present
+    result = m.matched_commands(text, {"//C": "FIX-C", "//CC": "FIX-CC"})
+
+    # Then both are reported, longest first (matching replace_all precedence)
+    assert result == ["//CC", "//C"]
+
+
+def test_matched_commands_empty_when_none_present():
+    # Given text with no command tokens
+    text = "plain text, nothing to expand"
+
+    # When we ask which commands are present
+    result = m.matched_commands(text, {"//C": "FIX-C", "//CC": "FIX-CC"})
+
+    # Then nothing is matched
+    assert result == []
