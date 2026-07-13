@@ -48,6 +48,34 @@ def test_fix_restores_clipboard_when_llm_fails(clipboard, mock_completion):
     assert clipboard["value"] == "text //CC"
 
 
+def test_fix_routes_command_to_its_pinned_model(clipboard, mock_completion, monkeypatch):
+    # Given a command pinned to a specific model
+    monkeypatch.setattr(m, "CODES", {"//DOH": "// fix typos"})
+    monkeypatch.setattr(m, "MODELS", {"//DOH": "claude-haiku"})
+    clipboard["value"] = "some typo //DOH"
+    calls = mock_completion(return_text="fixed")
+
+    # When we run the fix flow
+    make_app().fix()
+
+    # Then the completion is routed to the pinned model
+    assert calls[0]["model"] == "openai/claude-haiku"
+
+
+def test_fix_uses_default_model_when_command_unpinned(clipboard, mock_completion, monkeypatch):
+    # Given a command that pins no model
+    monkeypatch.setattr(m, "CODES", {"//CC": "// clear and concise"})
+    monkeypatch.setattr(m, "MODELS", {})
+    clipboard["value"] = "make this //CC"
+    calls = mock_completion(return_text="fixed")
+
+    # When we run the fix flow
+    make_app().fix()
+
+    # Then the completion falls back to the global default model
+    assert calls[0]["model"] == m.gateway_model(m.MODEL)
+
+
 def test_fix_notifies_and_logs_processing_then_pasted(clipboard, mock_completion, mock_notify, caplog):
     # Given a selection carrying a command and a gateway that returns fixed text
     clipboard["value"] = "please //CC fix"
