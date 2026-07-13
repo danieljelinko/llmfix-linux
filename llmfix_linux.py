@@ -14,6 +14,7 @@
 import os, time, pyperclip, threading, base64, logging, argparse, tomllib, subprocess
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 from pynput.keyboard import Key, Controller, Listener
@@ -71,8 +72,16 @@ def commands_path() -> Path:
     "Path to the optional `commands.toml` sitting next to this script."
     return Path(__file__).resolve().parent / "commands.toml"
 
-def load_commands(path: Path, defaults: dict[str, str]) -> dict[str, str]:
-    "Merge the `[commands]` table of a TOML `path` over `defaults`; return `defaults` if it is missing or malformed."
+def command_instruction(value: str | dict[str, Any]) -> str:
+    "Instruction text of a command spec: the string itself, or its `instruction` field."
+    return value if isinstance(value, str) else value.get("instruction", "")
+
+def command_model(value: str | dict[str, Any]) -> str | None:
+    "Model alias a command spec pins, or None for a bare string / table without `model`."
+    return None if isinstance(value, str) else value.get("model")
+
+def load_command_specs(path: Path, defaults: dict[str, str]) -> dict[str, str | dict[str, Any]]:
+    "Merge the `[commands]` table of a TOML `path` over `defaults`; values may be a string or a `{instruction, model}` table. Return `defaults` if the file is missing or malformed."
     if not path.exists():
         return dict(defaults)
     try:
@@ -82,7 +91,17 @@ def load_commands(path: Path, defaults: dict[str, str]) -> dict[str, str]:
         return dict(defaults)
     return {**defaults, **data.get("commands", {})}
 
-CODES = load_commands(commands_path(), DEFAULT_CODES)
+def load_commands(path: Path, defaults: dict[str, str]) -> dict[str, str]:
+    "Command → instruction (table specs reduced to their instruction). Back-compat shape."
+    return {c: command_instruction(v) for c, v in load_command_specs(path, defaults).items()}
+
+def load_models(path: Path, defaults: dict[str, str]) -> dict[str, str]:
+    "Command → pinned model alias, only for commands that pin one."
+    return {c: mdl for c, v in load_command_specs(path, defaults).items() if (mdl := command_model(v))}
+
+SPECS  = load_command_specs(commands_path(), DEFAULT_CODES)
+CODES  = {c: command_instruction(v) for c, v in SPECS.items()}
+MODELS = {c: mdl for c, v in SPECS.items() if (mdl := command_model(v))}
 
 def print_codes(codes: dict[str, str]) -> None:
     "Print the available `//` commands and their descriptions as a table on stdout."
@@ -100,6 +119,11 @@ def replace_all(txt, reps):
 def matched_commands(inp: str, codes: dict[str, str]) -> list[str]:
     "The // command keys present in `inp`, longest first (matches replace_all precedence)."
     return sorted((c for c in codes if c in inp), key=len, reverse=True)
+
+def model_for(inp: str, codes: dict[str, str], models: dict[str, str], default: str) -> str:
+    "Model for `inp`: the pinned model of the longest matched command, else `default`."
+    matched = matched_commands(inp, codes)
+    return models.get(matched[0], default) if matched else default
 
 def resize_img(img, max_px=1_150_000):
     w, h = img.size
@@ -154,7 +178,7 @@ def capture_screen():
         log.debug("Capture done")
         return img
 
-def llm(inp: str):
+def llm(inp: str, model: str = MODEL):
     log.debug(f"LLM input ({len(inp)} chars): {inp[:100]}...")
     prompt = (
         "Below is the text a user copied to their clipboard along with a screenshot. "
@@ -177,14 +201,14 @@ def llm(inp: str):
             dict(type="text", text=prompt),
             dict(type="image_url", image_url=dict(url=f"data:image/png;base64,{img_b64(resized)}"))
         ]
-        log.info(f"Using {MODEL} with screenshot")
+        log.info(f"Using {model} with screenshot")
     else:
         content = prompt
-        log.debug(f"Using {MODEL}")
+        log.debug(f"Using {model}")
 
     try:
         log.debug(f"Sending to {GATEWAY_BASE}...")
-        resp = completion(model=gateway_model(MODEL), messages=[dict(role="user", content=content)], api_base=GATEWAY_BASE, api_key="dummy", num_retries=0, max_retries=0)  # local gateway: fail fast, don't retry
+        resp = completion(model=gateway_model(model), messages=[dict(role="user", content=content)], api_base=GATEWAY_BASE, api_key="dummy", num_retries=0, max_retries=0)  # local gateway: fail fast, don't retry
         res = resp.choices[0].message.content
         log.debug(f"Response ({len(res)} chars): {res[:100]}...")
         return res
@@ -363,11 +387,12 @@ class ToolbarApp:
             pyperclip.copy(old)
             return
 
-        cmds = matched_commands(inp, CODES)
-        notify("Processing…", f"{', '.join(cmds) or 'no command'}: {inp[:80]}")
-        log.info("Processing text %r with command(s) %s", inp[:200], cmds or ["(none)"])
+        cmds  = matched_commands(inp, CODES)
+        model = model_for(inp, CODES, MODELS, MODEL)
+        notify("Processing…", f"{', '.join(cmds) or 'no command'} [{model}]: {inp[:80]}")
+        log.info("Processing text %r with command(s) %s using model %s", inp[:200], cmds or ["(none)"], model)
         try:
-            res = llm(inp)
+            res = llm(inp, model)
         except Exception as e:
             log.error(f"Error: {e}; leaving selection untouched")
             notify("LLMFix error", str(e))

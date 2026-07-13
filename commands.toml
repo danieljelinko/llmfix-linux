@@ -7,21 +7,27 @@
 #
 # Special case: //SS has an empty value. Instead of substituting text it switches
 # on screenshot mode — the monitor under the mouse is captured and attached to the
-# request.
+# request. //SS must therefore stay on a vision-capable model (sonnet/opus/gemini).
+#
+# A value may be a plain string (instruction only, model = the LLMFIX_MODEL default)
+# or a table pinning a cheaper/specific gateway model:
+#   "//X" = { instruction = "// do X", model = "claude-haiku" }
+# Valid aliases are whatever `curl :4001/v1/models` returns (e.g. claude-sonnet,
+# claude-opus, claude-fable, claude-haiku, gpt-codex, gemini). Unpinned → default.
 #
 # Edit this file to add, change, or remove commands. Keys must start with //.
 # If this file is missing or malformed, llmfix falls back to its built-in defaults.
 # Run `uv run llmfix_linux.py --list` to see the resulting table.
 
 [commands]
-"//C" = "// Correct the spelling and grammar and punctuation, but do not change the meaning or the language of the text, keep the words style and input language as they are"
+"//C" = { instruction = "// Correct the spelling and grammar and punctuation, but do not change the meaning or the language of the text, keep the words style and input language as they are", model = "claude-haiku" }  # mechanical correction
 "//CC" = "// edit to be clear and concise, prefer to use bulletpoints instead of verbose paragraphs. Minimize loss of information while compacting."
 "//FR" = "// edit to be friendly and informal"
 "//FO" = "// edit to be formal and polite"
 "//BLUF" = "// edit to bring the bottom line upfront"
-"//DOH" = "// edit to fix typo's and spelling mistakes"
-"//HH" = "// edit to fix typo's and spelling mistakes, do not translate into English keep the original language Hungarian"
+"//DOH" = { instruction = "// edit to fix typo's and spelling mistakes", model = "claude-haiku" }  # mechanical correction
+"//HH" = { instruction = "// edit to fix typo's and spelling mistakes, do not translate into English keep the original language Hungarian", model = "claude-haiku" }  # mechanical — verify haiku's Hungarian quality
 "//MD" = "// transform to markdown"
 "//FS" = "// make fastai style. concise, short var names, as much on one line as possible, but no `;`. Dont add ``python codefence."
 "//PC" = "// edit to be polite and friendly and orthographically correct"
-"//SS" = ""
+"//SS" = { instruction = "", model = "claude-sonnet" }  # screenshot mode — must be vision-capable

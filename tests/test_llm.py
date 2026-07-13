@@ -18,6 +18,17 @@ def test_llm_returns_model_output_and_expands_command_in_text_mode(mock_completi
     assert "//CC" not in sent
 
 
+def test_llm_routes_to_given_model(mock_completion):
+    # Given a fake gateway
+    calls = mock_completion(return_text="ok")
+
+    # When we call llm with an explicit model override
+    m.llm("x", "claude-haiku")
+
+    # Then the completion is routed to that model's gateway route
+    assert calls[0]["model"] == "openai/claude-haiku"
+
+
 def test_llm_disables_retries_and_targets_the_gateway(mock_completion):
     # Given a fake gateway
     calls = mock_completion(return_text="ok")
