@@ -14,8 +14,8 @@
 # Run `uv run llmfix_linux.py --list` to see the resulting table.
 
 [commands]
-"//C" = "// Correct the spelling and grammar and punctuation, but do not change the meaning of the text, keep the words style and input language as they are"
-"//CC" = "// edit to be clear and concise"
+"//C" = "// Correct the spelling and grammar and punctuation, but do not change the meaning or the language of the text, keep the words style and input language as they are"
+"//CC" = "// edit to be clear and concise, prefer to use bulletpoints instead of verbose paragraphs. Minimize loss of information while compacting."
 "//FR" = "// edit to be friendly and informal"
 "//FO" = "// edit to be formal and polite"
 "//BLUF" = "// edit to bring the bottom line upfront"
