@@ -36,6 +36,10 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# just up/down runtime state
+/logs/
+*.pid
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -182,3 +186,4 @@ cython_debug/
 /CLAUDE.md
 /CLAUDE.md.bak
 # END Ruler Generated Files
+.venv/
