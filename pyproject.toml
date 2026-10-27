@@ -16,6 +16,7 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-randomly>=4.1.0",
+    "ruff>=0.16.0",
 ]
 
 # Not an installable package — this project only exists to provide a test/run environment.
@@ -26,3 +27,6 @@ package = false
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+ignore = ["I001", "ISC004", "FURB167"]   # house style: see .ruler/1007_ruff_linting.md
